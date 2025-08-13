@@ -1,0 +1,5 @@
+gunicorn>=22.0, <23.0
+uvicorn>=0.23, <0.24
+fastapi>=0.111, <0.112
+mcp>=1.9.3
+fastmcp>=2.7.0

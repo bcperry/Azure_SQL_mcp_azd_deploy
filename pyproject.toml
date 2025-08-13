@@ -1,0 +1,13 @@
+[project]
+name = "fastmcp-azd-deploy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.111,<0.112",
+    "fastmcp>=2.7.0",
+    "gunicorn>=22.0,<23.0",
+    "mcp[cli]>=1.9.3",
+    "uvicorn>=0.23,<0.24",
+]
