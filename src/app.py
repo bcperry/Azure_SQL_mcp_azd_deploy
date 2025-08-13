@@ -51,21 +51,55 @@ async def describe_table(table_name: str = Field(description="Name of the table 
 
 @mcp.tool()
 async def write_query(query: str = Field(description="SQL query to execute")) -> str:
-    # """Execute an INSERT or UPDATE, or DELETE query on the SQL database"""
-    """Execute an INSERT or UPDATE query on the SQL database"""
-
-    if query.strip().upper().startswith("SELECT"):
-        raise ValueError("SELECT queries are not allowed for write_query")
-    if not query.strip().upper().contains("DELETE"):
-        raise ValueError("No DELETE queries are allowed for write_query")
+    """Execute an INSERT or UPDATE query on existing tables only"""
+    
+    # Normalize the query for checking
+    normalized_query = query.strip().upper()
+    
+    # Only allow INSERT and UPDATE statements
+    allowed_operations = ["INSERT", "UPDATE"]
+    if not any(normalized_query.startswith(op) for op in allowed_operations):
+        raise ValueError("Only INSERT and UPDATE queries are allowed for write_query")
+    
+    # Block dangerous keywords that could modify schema or users
+    dangerous_keywords = [
+        "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "MERGE", 
+        "EXEC", "EXECUTE", "CALL", "GRANT", "REVOKE", "COMMIT", 
+        "ROLLBACK", "SAVEPOINT", "USER", "LOGIN", "ROLE", "PERMISSION",
+        "SCHEMA", "DATABASE", "INDEX", "TRIGGER", "PROCEDURE", "FUNCTION"
+    ]
+    
+    for keyword in dangerous_keywords:
+        if keyword in normalized_query:
+            raise ValueError(f"Keyword '{keyword}' is not allowed - only data modifications on existing tables permitted")
+    
+    # Execute the query
     results = db._execute_query(query)
     return str(results)
 
 @mcp.tool()
 async def read_query(query: str = Field(description="SELECT SQL query to execute")) -> str:
     """Execute a SELECT query on the SQL database"""
-    if not query.strip().upper().startswith("SELECT"):
+    
+    # Normalize the query for checking
+    normalized_query = query.strip().upper()
+    
+    # Only allow SELECT statements
+    if not normalized_query.startswith("SELECT"):
         raise ValueError("Only SELECT queries are allowed for read_query")
+    
+    # Block dangerous keywords that could modify data or schema
+    dangerous_keywords = [
+        "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", 
+        "TRUNCATE", "MERGE", "EXEC", "EXECUTE", "CALL", "GRANT", 
+        "REVOKE", "COMMIT", "ROLLBACK", "SAVEPOINT"
+    ]
+    
+    for keyword in dangerous_keywords:
+        if keyword in normalized_query:
+            raise ValueError(f"Keyword '{keyword}' is not allowed in read-only queries")
+    
+    # Execute the query
     results = db._execute_query(query)
     return str(results)
 
