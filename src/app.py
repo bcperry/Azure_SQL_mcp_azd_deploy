@@ -4,9 +4,14 @@ from SqlDB import SqlDatabase
 from mcp.server.fastmcp import FastMCP
 import dotenv
 
+# Load environment variables from .env file (for local development)
 dotenv.load_dotenv(".env")
 
-connection_string = os.environ["AZURE_SQL_CONNECTIONSTRING"]
+# Get connection string from environment
+connection_string = os.environ.get("AZURE_SQL_CONNECTIONSTRING")
+print(f"Connected using: {connection_string}")
+if not connection_string:
+    raise ValueError("AZURE_SQL_CONNECTIONSTRING environment variable is required")
 
 
 # app = FastAPI()
@@ -36,19 +41,23 @@ async def describe_table(table_name: str = Field(description="Name of the table 
             )
     return str(results)
 
-@mcp.tool()
-async def create_table(query: str = Field(description="CREATE TABLE SQL statement")) -> str:
-    """Create a table in the SQL database"""
-    if not query.strip().upper().startswith("CREATE TABLE"):
-        raise ValueError("Only CREATE TABLE statements are allowed")
-    db._execute_query(query)
-    return f"Table created successfully."
+# @mcp.tool()
+# async def create_table(query: str = Field(description="CREATE TABLE SQL statement")) -> str:
+#     """Create a table in the SQL database"""
+#     if not query.strip().upper().startswith("CREATE TABLE"):
+#         raise ValueError("Only CREATE TABLE statements are allowed")
+#     db._execute_query(query)
+#     return f"Table created successfully."
 
 @mcp.tool()
 async def write_query(query: str = Field(description="SQL query to execute")) -> str:
-    """Execute an INSERT, UPDATE, or DELETE query on the SQL database"""
+    # """Execute an INSERT or UPDATE, or DELETE query on the SQL database"""
+    """Execute an INSERT or UPDATE query on the SQL database"""
+
     if query.strip().upper().startswith("SELECT"):
         raise ValueError("SELECT queries are not allowed for write_query")
+    if not query.strip().upper().contains("DELETE"):
+        raise ValueError("No DELETE queries are allowed for write_query")
     results = db._execute_query(query)
     return str(results)
 
