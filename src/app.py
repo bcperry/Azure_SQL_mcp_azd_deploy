@@ -1,97 +1,65 @@
-from typing import Any
-import httpx
-from fastmcp import FastMCP
+import os
+from pydantic import Field
+from SqlDB import SqlDatabase
+from mcp.server.fastmcp import FastMCP
+import dotenv
 
-mcp = FastMCP("Weather")
+dotenv.load_dotenv(".env")
 
-# bare bones example of a FastMCP sse server
+connection_string = os.environ["AZURE_SQL_CONNECTIONSTRING"]
 
-# Add MCP functionality with decorators
-# Constants
-NWS_API_BASE = "https://api.weather.gov"
-USER_AGENT = "weather-app/1.0"
 
-async def make_nws_request(url: str) -> dict[str, Any] | None:
-    """Make a request to the NWS API with proper error handling."""
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/geo+json"
-    }
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, headers=headers, timeout=30.0)
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            return None
+# app = FastAPI()
+mcp = FastMCP("AzureSQL")
 
-def format_alert(feature: dict) -> str:
-    """Format an alert feature into a readable string."""
-    props = feature["properties"]
-    return f"""
-    Event: {props.get('event', 'Unknown')}
-    Area: {props.get('areaDesc', 'Unknown')}
-    Severity: {props.get('severity', 'Unknown')}
-    Description: {props.get('description', 'No description available')}
-    Instructions: {props.get('instruction', 'No specific instructions provided')}
-    """
+# from sqlite_db import SqliteDatabase
+db = SqlDatabase(connection_string)
+
 
 @mcp.tool()
-async def get_alerts(state: str) -> str:
-    """Get weather alerts for a US state.
+async def list_tables() -> str:
+    """List all tables in the SQL database"""
 
-    Args:
-        state: Two-letter US state code (e.g. CA, NY)
-    """
-    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
-    data = await make_nws_request(url)
-
-    if not data or "features" not in data:
-        return "Unable to fetch alerts or no alerts found."
-
-    if not data["features"]:
-        return "No active alerts for this state."
-
-    alerts = [format_alert(feature) for feature in data["features"]]
-    return "\n---\n".join(alerts)
+    query = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+    results = db._execute_query(query)
+    return str(results)
 
 @mcp.tool()
-async def get_forecast(latitude: float, longitude: float) -> str:
-    """Get weather forecast for a location.
+async def describe_table(table_name: str = Field(description="Name of the table to describe")) -> str:
+    """Get the schema information for a specific table"""
+    if table_name is None:
+        raise ValueError("Missing table_name argument")
+    results = db._execute_query(
+        f"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE \
+        FROM INFORMATION_SCHEMA.COLUMNS \
+        WHERE TABLE_NAME = '{table_name}';"
+            )
+    return str(results)
 
-    Args:
-        latitude: Latitude of the location
-        longitude: Longitude of the location
-    """
-    # First get the forecast grid endpoint
-    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
-    points_data = await make_nws_request(points_url)
+@mcp.tool()
+async def create_table(query: str = Field(description="CREATE TABLE SQL statement")) -> str:
+    """Create a table in the SQL database"""
+    if not query.strip().upper().startswith("CREATE TABLE"):
+        raise ValueError("Only CREATE TABLE statements are allowed")
+    db._execute_query(query)
+    return f"Table created successfully."
 
-    if not points_data:
-        return "Unable to fetch forecast data for this location."
+@mcp.tool()
+async def write_query(query: str = Field(description="SQL query to execute")) -> str:
+    """Execute an INSERT, UPDATE, or DELETE query on the SQL database"""
+    if query.strip().upper().startswith("SELECT"):
+        raise ValueError("SELECT queries are not allowed for write_query")
+    results = db._execute_query(query)
+    return str(results)
 
-    # Get the forecast URL from the points response
-    forecast_url = points_data["properties"]["forecast"]
-    forecast_data = await make_nws_request(forecast_url)
-
-    if not forecast_data:
-        return "Unable to fetch detailed forecast."
-
-    # Format the periods into a readable forecast
-    periods = forecast_data["properties"]["periods"]
-    forecasts = []
-    for period in periods[:5]:  # Only show next 5 periods
-        forecast = f"""
-    {period['name']}:
-    Temperature: {period['temperature']}°{period['temperatureUnit']}
-    Wind: {period['windSpeed']} {period['windDirection']}
-    Forecast: {period['detailedForecast']}
-    """
-        forecasts.append(forecast)
-
-    return "\n---\n".join(forecasts)
+@mcp.tool()
+async def read_query(query: str = Field(description="SELECT SQL query to execute")) -> str:
+    """Execute a SELECT query on the SQL database"""
+    if not query.strip().upper().startswith("SELECT"):
+        raise ValueError("Only SELECT queries are allowed for read_query")
+    results = db._execute_query(query)
+    return str(results)
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
-
+    mcp.run(transport="streamable-http")

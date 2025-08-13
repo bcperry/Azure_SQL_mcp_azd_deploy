@@ -9,5 +9,6 @@ dependencies = [
     "fastmcp>=2.7.0",
     "gunicorn>=22.0,<23.0",
     "mcp[cli]>=1.9.3",
+    "pyodbc>=5.2.0",
     "uvicorn>=0.23,<0.24",
 ]
